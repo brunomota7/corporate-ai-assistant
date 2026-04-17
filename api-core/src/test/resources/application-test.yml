@@ -1,0 +1,37 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+
+  flyway:
+    enabled: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6370
+
+security:
+  jwt:
+    secret: 51cd49230efd8fe41e04a1c56d28f1bf
+    expiration-ms: 3600000
+
+ai:
+  service:
+    url: http://localhost:9999
+
+logging:
+  level:
+    root: WARN
+    br.com.apicore: DEBUG
