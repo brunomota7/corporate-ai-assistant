@@ -1,0 +1,16 @@
+# Env
+.env
+
+# Java
+api-core/target/
+*.class
+
+# Python
+ai-service/__pycache__/
+ai-service/.venv/
+ai-service/*.pyc
+
+# IDE
+.idea/
+.vscode/settings.json
+*.iml
