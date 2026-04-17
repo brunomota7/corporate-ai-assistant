@@ -24,7 +24,7 @@ spring:
 
 security:
   jwt:
-    secret: 51cd49230efd8fe41e04a1c56d28f1bf
+    secret: ${JWT_SECRET:test-secret}
     expiration-ms: 3600000
 
 ai:
