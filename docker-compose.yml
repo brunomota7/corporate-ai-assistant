@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -37,7 +37,7 @@ services:
     container_name: corporate-ai-python
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/corporate_ai
+      DATABASE_URL: postgres://postgres:postgres@postgres:5433/corporate_ai
     ports:
       - "8081:8081"
     depends_on:
@@ -55,7 +55,7 @@ services:
       dockerfile: Dockerfile
     container_name: corporate-ai-api-core
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/corporate_ai
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5433/corporate_ai
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_DATA_REDIS_HOST: redis
@@ -73,5 +73,5 @@ services:
         condition: service_healthy
 
 volumes:
-  posgres_data:
+  postgres_data:
   redis_data:

@@ -1,0 +1,10 @@
+CREATE TABLE tb_users (
+    id UUID PRIMARY KEY NOT NULL DEFAULT gen_random_uuid(),
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(180) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    role VARCHAR(50) CHECK (role IN ('ADMIN', 'USER', 'VIEWER')) NOT NULL DEFAULT 'USER',
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now()
+);
