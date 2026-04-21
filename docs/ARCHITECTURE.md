@@ -84,6 +84,9 @@ br.com.api_core/
 │   ├── security/
 │   │   ├── JwtService.java       # Geração e validação de tokens JWT
 │   │   └── JwtFilter.java        # OncePerRequestFilter — extrai e valida token
+│   ├── converter/
+│   │   ├── FloatArrayToVectorConverter.java  # float[] <-> vector(1536) do pgvector
+│   │   └── MapToJsonbConverter.java          # Map<String,Object> <-> jsonb
 │   └── exception/
 │       └── GlobalExceptionHandler.java  # @ControllerAdvice — trata exceções globais
 │
@@ -254,6 +257,56 @@ tb_documents  (RAG)
 | `V5__create_order_items.sql` | Itens de pedido com snapshot de preço |
 | `V6__create_documents.sql` | Documentos para RAG com embeddings |
 | `V7__create_documents_index.sql` | Índice ivfflat para busca semântica |
+
+---
+
+## Entidades — observações e detalhes importantes
+
+### Geração de UUID via `@PrePersist`
+
+Todas as entidades geram o próprio `id` via `UUID.randomUUID()` no `@PrePersist`, ao invés de usar `@GeneratedValue`. Isso é intencional — permite que o `id` seja conhecido antes do `flush` para o banco, o que facilita logs, rastreabilidade e testes. O banco também define `DEFAULT gen_random_uuid()` na migration como fallback, mas na prática quem gera é sempre o Java.
+
+### Timestamps via `@PrePersist` e `@PreUpdate`
+
+`created_at` e `updated_at` são gerenciados pelos callbacks JPA, não pelo banco. O banco define `DEFAULT now()` nas migrations como fallback para inserções diretas via SQL (scripts, seeds), mas em operações via JPA o Java sempre controla os valores.
+
+### `AuditLog` — tabela append-only
+
+Não possui `updated_at` e nenhum setter deve ser usado para alterar registros existentes. Todo registro é imutável após a inserção. O `AuditService` apenas chama `save()`, nunca `update()`.
+
+### `OrderItem` — snapshot de preço
+
+O campo `unit_price` armazena o preço do produto **no momento da criação do pedido**, independentemente de alterações futuras no `tb_products`. Isso garante integridade histórica dos pedidos. O valor deve ser copiado de `Product.price` no momento da criação do `OrderItem`, nunca referenciado dinamicamente.
+
+### `Order` — cascade e orphanRemoval
+
+O relacionamento `@OneToMany` com `OrderItem` usa `cascade = CascadeType.ALL` e `orphanRemoval = true`. Isso significa que ao salvar um `Order` com itens, os itens são salvos automaticamente. Ao remover um item da lista e salvar o `Order`, o item é deletado do banco. Nunca delete um `OrderItem` diretamente pelo repositório — remova da lista do `Order`.
+
+### `Document` — converters para tipos nativos do PostgreSQL
+
+O Hibernate não possui mapeamento nativo para `vector` (pgvector) nem `jsonb`. Dois `AttributeConverter` foram criados em `infra/converter/` para resolver isso:
+
+**`FloatArrayToVectorConverter`** — converte `float[]` para o formato string `[0.1,0.2,...]` esperado pelo pgvector e vice-versa. O campo `embedding` é preenchido exclusivamente pelo ai-service após chamada à OpenAI Embeddings API (`text-embedding-3-small`, 1536 dimensões). A api-core apenas recebe e persiste o array.
+
+**`MapToJsonbConverter`** — converte `Map<String, Object>` para JSON string usando Jackson, que o PostgreSQL armazena como `jsonb`. O campo `metadata` é livre e pode conter qualquer estrutura, por exemplo:
+```json
+{ "productId": "uuid-aqui", "category": "electronics", "language": "pt-BR" }
+```
+Isso permite filtros futuros por metadados no pgvector sem alterar o schema do banco.
+
+O `ObjectMapper` nos converters é `static` — `ObjectMapper` é thread-safe e instanciá-lo a cada conversão seria um desperdício de recursos.
+
+### `Document.source_id` — referência sem FK
+
+O campo `source_id` é um `UUID` simples sem `@ManyToOne` nem FK no banco. Isso é intencional — um documento pode ser originado de um produto, pedido, FAQ ou qualquer fonte futura. Manter uma FK forçaria a escolha de uma única tabela de origem. O campo `source_type` (`PRODUCT`, `ORDER`, `MANUAL`, `FAQ`) indica qual tabela consultar se precisar recuperar o registro de origem.
+
+### `Role` — prefixo `ROLE_`
+
+Os valores do enum são armazenados com o prefixo `ROLE_` diretamente no banco (`ROLE_ADMIN`, `ROLE_USER`, `ROLE_VIEWER`). Isso elimina transformações no código ao carregar o `UserDetails` — o valor do banco é usado diretamente como `GrantedAuthority`. O `@Enumerated(EnumType.STRING)` garante que o Hibernate persiste o nome do enum, não o ordinal.
+
+### `OrderStatus` — sem prefixo
+
+Ao contrário de `Role`, `OrderStatus` não usa prefixo. O Spring Security não interfere nesse enum — ele é usado apenas para lógica de negócio, sem envolvimento com `hasRole()` ou `GrantedAuthority`.
 
 ---
 
