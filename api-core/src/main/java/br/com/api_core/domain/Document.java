@@ -1,5 +1,7 @@
 package br.com.api_core.domain;
 
+import br.com.api_core.infra.converter.FloatArrayToVectorConverter;
+import br.com.api_core.infra.converter.MapToJsonbConverter;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
@@ -26,9 +28,11 @@ public class Document {
     @Column(name = "source_id", nullable = true)
     private UUID sourceId;
 
+    @Convert(converter = FloatArrayToVectorConverter.class)
     @Column(name = "embedding", nullable = true, columnDefinition = "vector(1536)")
     private float[] embedding;
 
+    @Convert(converter = MapToJsonbConverter.class)
     @Column(name = "metadata", nullable = true, columnDefinition = "jsonb")
     private Map<String, Object> metadata;
 
