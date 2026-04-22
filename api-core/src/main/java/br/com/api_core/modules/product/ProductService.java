@@ -68,6 +68,7 @@ public class ProductService {
             product.getName(),
             product.getDescription(),
             product.getPrice(),
+            product.getStockQuantity(),
             product.getCategory(),
             product.getActive()
         );
@@ -83,6 +84,7 @@ public class ProductService {
                         product.getName(),
                         product.getDescription(),
                         product.getPrice(),
+                        product.getStockQuantity(),
                         product.getCategory(),
                         product.getActive()
                 ))
@@ -104,6 +106,7 @@ public class ProductService {
                 product.getName(),
                 product.getDescription(),
                 product.getPrice(),
+                product.getStockQuantity(),
                 product.getCategory(),
                 product.getActive()
         );
@@ -129,6 +132,7 @@ public class ProductService {
                 product.getName(),
                 product.getDescription(),
                 product.getPrice(),
+                product.getStockQuantity(),
                 product.getCategory(),
                 product.getActive()
         );
