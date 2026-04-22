@@ -374,6 +374,83 @@ Controller acessa userId via Principal
 
 ---
 
+## Tratamento de exceções
+
+### Hierarquia de exceptions
+
+Todas as exceptions de negócio estendem `BusinessException`, localizada em `infra/exception/`. Isso permite que o `GlobalExceptionHandler` capture qualquer exception de negócio em um único método `@ExceptionHandler(BusinessException.class)`, sem precisar adicionar handlers novos a cada exception criada.
+
+```
+BusinessException (base — RuntimeException)
+├── UserAlreadyExistsException     → HTTP 409 CONFLICT
+├── ResourceNotFoundException      → HTTP 404 NOT FOUND
+└── UnauthorizedException          → HTTP 401 UNAUTHORIZED
+```
+
+Novas exceptions de negócio nos módulos futuros (product, order) seguem o mesmo padrão — estendem `BusinessException` com o status HTTP adequado no construtor.
+
+### Response padrão de erro
+
+Toda resposta de erro retorna o record `ErrorResponse` com o seguinte formato:
+
+```json
+{
+  "status": 409,
+  "error": "Conflict",
+  "message": "User already exists with email: user@email.com",
+  "path": "/api/auth/register",
+  "timestamp": "2026-04-17T10:30:00"
+}
+```
+
+### Handlers registrados no `GlobalExceptionHandler`
+
+| Handler | Captura | Status retornado |
+|---|---|---|
+| `handleBusinessException` | `BusinessException` e todas as filhas | Definido na exception |
+| `handleValidationException` | `MethodArgumentNotValidException` (falha no `@Valid`) | 400 BAD REQUEST |
+| `handleBadCredentials` | `BadCredentialsException` (login inválido) | 401 UNAUTHORIZED |
+| `handleGenericException` | `Exception` (fallback geral) | 500 INTERNAL SERVER ERROR |
+
+O fallback genérico retorna sempre `"An unexpected error occurred"` — nunca expõe `ex.getMessage()` para não vazar detalhes de infraestrutura.
+
+---
+
+## Estratégia de testes
+
+### Testes unitários de service (`@ExtendWith(MockitoExtension.class)`)
+
+Usados para testar a lógica de negócio isoladamente. Todas as dependências são mockadas com `@Mock` e injetadas com `@InjectMocks`. Não sobe contexto Spring — execução rápida.
+
+Coberturas obrigatórias por service:
+- Caminho feliz (operação bem-sucedida)
+- Exception de negócio esperada (ex: `UserAlreadyExistsException`)
+- Casos de borda relevantes (ex: senha inválida, recurso não encontrado)
+
+### Testes de controller (`@WebMvcTest`)
+
+Usados para testar a camada HTTP: mapeamento de rotas, serialização/desserialização JSON, validação de DTOs e status HTTP. O service é mockado com `@MockitoBean`.
+
+**Configuração padrão para todos os `@WebMvcTest` do projeto:**
+
+```java
+@WebMvcTest(XyzController.class)
+@Import(TestSecurityConfig.class)
+@AutoConfigureMockMvc(addFilters = false)
+class XyzControllerTest { ... }
+```
+
+O `@AutoConfigureMockMvc(addFilters = false)` desativa todos os filtros de servlet (incluindo o `JwtFilter`) no contexto de teste. O `@Import(TestSecurityConfig.class)` importa uma config de segurança permissiva que libera todas as rotas e desabilita CSRF.
+
+O `TestSecurityConfig` fica em `src/test/java/br/com/api_core/support/` e é reutilizado por todos os controller tests via `@Import`.
+
+Coberturas obrigatórias por controller:
+- Requisição válida retorna status e body esperados
+- Requisição com body inválido retorna 400 (cobre o `@Valid`)
+- Para rotas protegidas: requisição sem token retorna 401 (testado em integração)
+
+---
+
 ## Decisões de infraestrutura
 
 ### Por que microsserviços separados?
