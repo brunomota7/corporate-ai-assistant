@@ -50,7 +50,7 @@ public class AuthService {
 
         User user = userRepository.findByEmail(dto.email())
                 .orElseThrow(() ->
-                    new UsernameNotFoundException("User not found with email: " + dto.email())
+                    new BadCredentialsException("Invalid email or password")
                 );
 
         if (!passwordEncoder.matches(dto.password(), user.getPassword())) {
