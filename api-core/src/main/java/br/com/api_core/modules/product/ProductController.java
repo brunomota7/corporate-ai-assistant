@@ -23,7 +23,6 @@ public class ProductController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<ProductResponseDTO> create(
             @Valid @RequestBody ProductCreateDTO dto) {
 
@@ -50,7 +49,6 @@ public class ProductController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<ProductResponseDTO> update(
             @PathVariable UUID id,
             @Valid @RequestBody ProductUpdateDTO dto) {
@@ -61,7 +59,6 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<Void> delete(
             @PathVariable UUID id) {
 

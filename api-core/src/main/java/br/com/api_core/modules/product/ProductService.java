@@ -25,7 +25,6 @@ public class ProductService {
     }
 
     private String generateSku(String productName) {
-
         String normalizedName = Normalizer
                 .normalize(productName, Normalizer.Form.NFD)
                 .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
@@ -37,19 +36,34 @@ public class ProductService {
                 .substring(0, 4)
                 .toUpperCase();
 
-        String sku = prefix + "-" + normalizedName;
+        return prefix + "-" + normalizedName;
+    }
 
+    private String generateUniqueSku(String productName) {
+        String sku;
+        do {
+            sku = generateSku(productName);
+        } while (productRepository.existsBySku(sku));
         return sku;
+    }
+
+    private ProductResponseDTO toResponseDTO(Product product) {
+        return new ProductResponseDTO(
+                product.getId(),
+                product.getSku(),
+                product.getName(),
+                product.getDescription(),
+                product.getPrice(),
+                product.getStockQuantity(),
+                product.getCategory(),
+                product.getActive()
+        );
     }
 
     @Transactional
     public ProductResponseDTO create(ProductCreateDTO dto) {
 
-        String sku = generateSku(dto.name());
-
-        if (productRepository.existsBySku(sku)) {
-            throw new ProductAlreadyExistsException(sku);
-        }
+        String sku = generateUniqueSku(dto.name());
 
         Product product = new Product();
         product.setSku(sku);
@@ -62,32 +76,14 @@ public class ProductService {
 
         productRepository.save(product);
 
-        return new ProductResponseDTO(
-            product.getId(),
-            product.getSku(),
-            product.getName(),
-            product.getDescription(),
-            product.getPrice(),
-            product.getStockQuantity(),
-            product.getCategory(),
-            product.getActive()
-        );
+        return toResponseDTO(product);
     }
 
     public List<ProductResponseDTO> findAllProducts() {
 
-        return productRepository.findAll()
+        return productRepository.findAllByActiveTrue()
                 .stream()
-                .map(product -> new ProductResponseDTO(
-                        product.getId(),
-                        product.getSku(),
-                        product.getName(),
-                        product.getDescription(),
-                        product.getPrice(),
-                        product.getStockQuantity(),
-                        product.getCategory(),
-                        product.getActive()
-                ))
+                .map(this::toResponseDTO)
                 .toList();
     }
 
@@ -100,42 +96,24 @@ public class ProductService {
             throw new ResourceNotFoundException("Product not found");
         }
 
-        return new ProductResponseDTO(
-                product.getId(),
-                product.getSku(),
-                product.getName(),
-                product.getDescription(),
-                product.getPrice(),
-                product.getStockQuantity(),
-                product.getCategory(),
-                product.getActive()
-        );
+        return toResponseDTO(product);
     }
 
+    @Transactional
     public ProductResponseDTO update(UUID id, ProductUpdateDTO dto) {
 
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
-        product.setName(dto.name());
-        product.setDescription(dto.description());
-        product.setPrice(dto.price());
-        product.setStockQuantity(dto.stockQuantity());
-        product.setCategory(dto.category());
-        product.setUpdatedAt(LocalDateTime.now());
+        if (dto.name() != null) product.setName(dto.name());
+        if (dto.description() != null) product.setDescription(dto.description());
+        if (dto.price() != null) product.setPrice(dto.price());
+        if (dto.stockQuantity() != null) product.setStockQuantity(dto.stockQuantity());
+        if (dto.category() != null) product.setCategory(dto.category());
 
         productRepository.save(product);
 
-        return new ProductResponseDTO(
-                product.getId(),
-                product.getSku(),
-                product.getName(),
-                product.getDescription(),
-                product.getPrice(),
-                product.getStockQuantity(),
-                product.getCategory(),
-                product.getActive()
-        );
+        return toResponseDTO(product);
     }
 
     public void delete(UUID id) {
