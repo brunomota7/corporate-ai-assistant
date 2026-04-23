@@ -90,10 +90,10 @@ public class ProductService {
     public ProductResponseDTO findProductById(UUID id) {
 
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Product", id.toString()));
 
         if (!Boolean.TRUE.equals(product.getActive())) {
-            throw new ResourceNotFoundException("Product not found");
+            throw new ResourceNotFoundException("Product", id.toString());
         }
 
         return toResponseDTO(product);
@@ -103,7 +103,7 @@ public class ProductService {
     public ProductResponseDTO update(UUID id, ProductUpdateDTO dto) {
 
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Product", id.toString()));
 
         if (dto.name() != null) product.setName(dto.name());
         if (dto.description() != null) product.setDescription(dto.description());
@@ -119,7 +119,7 @@ public class ProductService {
     public void delete(UUID id) {
 
         Product product =  productRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Product", id.toString()));
 
         product.setActive(false);
         productRepository.save(product);
