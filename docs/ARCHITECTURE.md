@@ -47,7 +47,10 @@ br.com.api_core/
 │   ├── auth/
 │   │   ├── AuthController.java   # POST /api/auth/register, POST /api/auth/login
 │   │   ├── AuthService.java      # Lógica de registro e autenticação
-│   │   └── dto/                  # LoginRequest, RegisterRequest, TokenResponse
+│   │   └── dto/
+│   │       ├── AuthRegisterDTO.java
+│   │       ├── AuthLoginDTO.java
+│   │       └── AuthResponseDTO.java
 │   │
 │   ├── chat/
 │   │   ├── ChatController.java   # POST /api/chat
@@ -56,18 +59,30 @@ br.com.api_core/
 │   │   └── dto/                  # ChatRequest, ChatResponse, MessageDTO
 │   │
 │   ├── product/
-│   │   ├── ProductController.java  # CRUD /api/products
+│   │   ├── ProductController.java   # GET, POST /api/products | GET, PUT, DELETE /api/products/{id}
 │   │   ├── ProductService.java
 │   │   └── dto/
+│   │       ├── ProductCreateDTO.java
+│   │       ├── ProductUpdateDTO.java
+│   │       └── ProductResponseDTO.java
 │   │
 │   ├── order/
-│   │   ├── OrderController.java  # CRUD /api/orders
+│   │   ├── OrderController.java        # Endpoints do usuário — /api/orders
+│   │   ├── AdminOrderController.java   # Endpoints admin — /api/admin/orders
 │   │   ├── OrderService.java
 │   │   └── dto/
+│   │       ├── OrderCreateDTO.java
+│   │       ├── OrderItemCreateDTO.java
+│   │       ├── OrderStatusUpdateDTO.java
+│   │       ├── OrderResponseDTO.java
+│   │       └── OrderItemResponseDTO.java
 │   │
 │   └── audit/
-│       ├── AuditService.java     # Persiste log após cada interação
+│       ├── AuditController.java     # GET /api/audit — consultas de auditoria
+│       ├── AdminAuditController.java # GET /api/admin/audit — exclusivo ADMIN
+│       ├── AuditService.java        # Persiste log após cada interação do chat
 │       └── dto/
+│           └── AuditLogResponseDTO.java
 │
 ├── domain/
 │   ├── User.java                 # Entidade mapeada para tb_users
@@ -80,15 +95,33 @@ br.com.api_core/
 │       ├── Role.java             # ROLE_ADMIN, ROLE_USER, ROLE_VIEWER
 │       └── OrderStatus.java      # PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED
 │
+├── domain/repository/
+│   ├── UserRepository.java
+│   ├── AuditLogRepository.java
+│   ├── ProductRepository.java
+│   ├── OrderRepository.java
+│   ├── OrderItemRepository.java
+│   └── DocumentRepository.java
+│
 ├── infra/
 │   ├── security/
-│   │   ├── JwtService.java       # Geração e validação de tokens JWT
-│   │   └── JwtFilter.java        # OncePerRequestFilter — extrai e valida token
+│   │   ├── JwtService.java              # Geração e validação de tokens JWT
+│   │   ├── JwtFilter.java               # OncePerRequestFilter — extrai e valida token
+│   │   ├── UserDetailsServiceImpl.java  # Carrega usuário do banco para o Spring Security
+│   │   └── SecurityUtils.java           # Extrai userId do Authentication para os controllers
 │   ├── converter/
 │   │   ├── FloatArrayToVectorConverter.java  # float[] <-> vector(1536) do pgvector
 │   │   └── MapToJsonbConverter.java          # Map<String,Object> <-> jsonb
 │   └── exception/
-│       └── GlobalExceptionHandler.java  # @ControllerAdvice — trata exceções globais
+│       ├── GlobalExceptionHandler.java       # @ControllerAdvice — trata exceções globais
+│       ├── ErrorResponse.java                # Record padrão de resposta de erro
+│       ├── BusinessException.java            # Base para todas as exceptions de negócio
+│       ├── UserAlreadyExistsException.java   # HTTP 409
+│       ├── ResourceNotFoundException.java    # HTTP 404
+│       ├── UnauthorizedException.java        # HTTP 401
+│       ├── ProductNotFoundException.java     # HTTP 404
+│       ├── OrderNotFoundException.java       # HTTP 404
+│       └── OrderCancellationNotAllowedException.java  # HTTP 422
 │
 └── client/
     └── AiServiceClient.java      # WebClient — chama /chat, /embed, /search no ai-service
@@ -126,12 +159,20 @@ ChatResponse → cliente
 | POST | `/api/auth/register` | público | Cadastro de usuário |
 | POST | `/api/auth/login` | público | Login e geração de JWT |
 | POST | `/api/chat` | USER, ADMIN | Enviar mensagem ao assistente |
-| GET | `/api/products` | USER, ADMIN, VIEWER | Listar produtos |
+| GET | `/api/products` | autenticado | Listar produtos ativos |
+| GET | `/api/products/{id}` | autenticado | Buscar produto por ID |
 | POST | `/api/products` | ADMIN | Criar produto |
 | PUT | `/api/products/{id}` | ADMIN | Atualizar produto |
-| DELETE | `/api/products/{id}` | ADMIN | Remover produto |
-| GET | `/api/orders` | USER, ADMIN | Listar pedidos |
+| DELETE | `/api/products/{id}` | ADMIN | Soft delete de produto |
+| GET | `/api/orders` | USER, ADMIN | Listar pedidos do usuário autenticado |
+| GET | `/api/orders/{id}` | USER, ADMIN | Buscar pedido por ID |
 | POST | `/api/orders` | USER, ADMIN | Criar pedido |
+| DELETE | `/api/orders/{id}` | USER, ADMIN | Cancelar pedido (só PENDING) |
+| GET | `/api/admin/orders` | ADMIN | Listar todos os pedidos |
+| PATCH | `/api/admin/orders/{id}/status` | ADMIN | Atualizar status do pedido |
+| GET | `/api/audit` | USER, ADMIN | Listar logs do usuário autenticado |
+| GET | `/api/audit/session/{sessionId}` | USER, ADMIN | Listar logs de uma sessão |
+| GET | `/api/admin/audit` | ADMIN | Listar todos os logs do sistema |
 | POST | `/api/admin/ingest` | ADMIN | Indexar documento no RAG |
 
 ---
@@ -382,9 +423,12 @@ Todas as exceptions de negócio estendem `BusinessException`, localizada em `inf
 
 ```
 BusinessException (base — RuntimeException)
-├── UserAlreadyExistsException     → HTTP 409 CONFLICT
-├── ResourceNotFoundException      → HTTP 404 NOT FOUND
-└── UnauthorizedException          → HTTP 401 UNAUTHORIZED
+├── UserAlreadyExistsException              → HTTP 409 CONFLICT
+├── ResourceNotFoundException               → HTTP 404 NOT FOUND
+├── UnauthorizedException                   → HTTP 401 UNAUTHORIZED
+├── ProductNotFoundException                → HTTP 404 NOT FOUND
+├── OrderNotFoundException                  → HTTP 404 NOT FOUND
+└── OrderCancellationNotAllowedException    → HTTP 422 UNPROCESSABLE ENTITY
 ```
 
 Novas exceptions de negócio nos módulos futuros (product, order) seguem o mesmo padrão — estendem `BusinessException` com o status HTTP adequado no construtor.
@@ -448,7 +492,6 @@ Coberturas obrigatórias por controller:
 - Requisição válida retorna status e body esperados
 - Requisição com body inválido retorna 400 (cobre o `@Valid`)
 - Para rotas protegidas: requisição sem token retorna 401 (testado em integração)
-
 ---
 
 ## Decisões de infraestrutura
