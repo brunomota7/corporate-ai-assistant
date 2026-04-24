@@ -59,6 +59,8 @@ public class SecurityConfig {
                         .requestMatchers(POST, "/api/orders").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(PUT, "/api/orders/**").hasAnyRole("USER", "ADMIN")
 
+                        .requestMatchers(GET, "/api/audit", "/api/audit/**").hasAnyRole("USER", "ADMIN")
+
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
                         .anyRequest().authenticated()

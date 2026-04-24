@@ -10,6 +10,5 @@ import java.util.UUID;
 @Repository
 public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
     List<AuditLog> findByUserId(UUID userId);
-    List<AuditLog> findBySessionId(UUID sessionId);
-    List<AuditLog> findByUserIdAndSessionId(UUID userId, UUID sessionId);
+    List<AuditLog> findByUserIdAndSessionId(UUID userId, String sessionId);
 }
