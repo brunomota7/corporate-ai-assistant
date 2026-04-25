@@ -53,10 +53,14 @@ br.com.api_core/
 │   │       └── AuthResponseDTO.java
 │   │
 │   ├── chat/
-│   │   ├── ChatController.java   # POST /api/chat
-│   │   ├── ChatService.java      # Orquestra histórico + chamada ao ai-service
-│   │   ├── ChatHistoryService.java  # Leitura e escrita no Redis
-│   │   └── dto/                  # ChatRequest, ChatResponse, MessageDTO
+│   │   ├── ChatController.java      # POST /api/chat — extrai User + IP, delega ao service
+│   │   ├── ChatService.java         # Orquestra histórico + RAG + LLM + auditoria
+│   │   ├── ChatHistoryService.java  # Leitura e escrita no Redis (TTL 2h)
+│   │   └── dto/
+│   │       ├── ChatRequestDTO.java  # message (@NotBlank) + sessionId (opcional)
+│   │       ├── ChatResponseDTO.java # sessionId + answer + tokensUsed
+│   │       ├── MessageDTO.java      # role (MessageRole) + content
+│   │       └── MessageRole.java     # enum USER / ASSISTANT com @JsonProperty
 │   │
 │   ├── product/
 │   │   ├── ProductController.java   # GET, POST /api/products | GET, PUT, DELETE /api/products/{id}
@@ -121,7 +125,8 @@ br.com.api_core/
 │       ├── UnauthorizedException.java        # HTTP 401
 │       ├── ProductNotFoundException.java     # HTTP 404
 │       ├── OrderNotFoundException.java       # HTTP 404
-│       └── OrderCancellationNotAllowedException.java  # HTTP 422
+│       ├── OrderCancellationNotAllowedException.java  # HTTP 422
+│       └── AiServiceUnavailableException.java       # HTTP 503
 │
 └── client/
     └── AiServiceClient.java      # WebClient — chama /chat, /embed, /search no ai-service
@@ -145,8 +150,8 @@ ChatService
   │       └── retorna chunks relevantes do pgvector
   ├── AiServiceClient.chat(messages + context)          → ai-service /chat
   │       └── retorna resposta do LLM
-  ├── ChatHistoryService.saveMessage(...)               → Redis
-  └── AuditService.save(userId, question, answer, ...)  → PostgreSQL
+  ├── ChatHistoryService.saveHistory(userId, sessionId, messages) → Redis
+  └── AuditService.save(user, sessionId, question, answer, tokensUsed, latencyMs, ip)  → PostgreSQL
       │
       ▼
 ChatResponse → cliente
@@ -187,6 +192,7 @@ Microsserviço de inteligência. Encapsula toda a comunicação com a OpenAI e a
 app/
 ├── main.py                    # Entrypoint FastAPI, registro de routers
 ├── config.py                  # Leitura de variáveis de ambiente (pydantic-settings)
+├── database.py                # Engine SQLAlchemy + SessionLocal + get_db()
 │
 ├── routers/
 │   ├── chat.py                # POST /chat
@@ -195,7 +201,7 @@ app/
 │   └── health.py              # GET /health
 │
 ├── services/
-│   ├── llm_service.py         # Integração com ChatOpenAI via LangChain
+│   ├── llm_service.py         # Integração com OpenAI (chat completions)
 │   └── vector_service.py      # Geração de embeddings e busca no pgvector
 │
 └── schemas/
@@ -233,7 +239,7 @@ api-core injeta chunks como contexto no prompt
 POST /chat  (messages + contexto injetado)
       │
       ▼
-LangChain ChatOpenAI.invoke(messages)  → OpenAI GPT
+llm_service.chat(messages)             → OpenAI GPT (gpt-4o-mini)
       │
       ▼
 retorna resposta para api-core
@@ -327,7 +333,7 @@ O relacionamento `@OneToMany` com `OrderItem` usa `cascade = CascadeType.ALL` e 
 
 O Hibernate não possui mapeamento nativo para `vector` (pgvector) nem `jsonb`. Dois `AttributeConverter` foram criados em `infra/converter/` para resolver isso:
 
-**`FloatArrayToVectorConverter`** — converte `float[]` para o formato string `[0.1,0.2,...]` esperado pelo pgvector e vice-versa. O campo `embedding` é preenchido exclusivamente pelo ai-service após chamada à OpenAI Embeddings API (`text-embedding-3-small`, 1536 dimensões). A api-core apenas recebe e persiste o array.
+**`FloatArrayToVectorConverter`** — converte `float[]` para o formato string `[0.1,0.2,...]` esperado pelo pgvector e vice-versa. O campo `embedding` é preenchido exclusivamente pelo ai-service após chamada à OpenAI Embeddings API (`text-embedding-3-small`, 1536 dimensões). O campo é preenchido pelo ai-service via VectorService.store() durante o ingest — a api-core não manipula embeddings diretamente.
 
 **`MapToJsonbConverter`** — converte `Map<String, Object>` para JSON string usando Jackson, que o PostgreSQL armazena como `jsonb`. O campo `metadata` é livre e pode conter qualquer estrutura, por exemplo:
 ```json
@@ -405,11 +411,19 @@ Controller acessa userId via Principal
 ```java
 // Rotas públicas
 .requestMatchers("/api/auth/**").permitAll()
-.requestMatchers(GET, "/api/products").hasAnyRole("USER", "ADMIN", "VIEWER")
 
-// Rotas protegidas
+// Produtos — leitura para qualquer autenticado, escrita só ADMIN
+.requestMatchers(GET, "/api/products", "/api/products/**").authenticated()
+.requestMatchers(POST, "/api/products").hasRole("ADMIN")
+.requestMatchers(PUT, "/api/products/**").hasRole("ADMIN")
+.requestMatchers(DELETE, "/api/products/**").hasRole("ADMIN")
+
+// Chat
 .requestMatchers(POST, "/api/chat").hasAnyRole("USER", "ADMIN")
+
+// Admin — todos os endpoints sob /api/admin
 .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
 .anyRequest().authenticated()
 ```
 
@@ -428,7 +442,8 @@ BusinessException (base — RuntimeException)
 ├── UnauthorizedException                   → HTTP 401 UNAUTHORIZED
 ├── ProductNotFoundException                → HTTP 404 NOT FOUND
 ├── OrderNotFoundException                  → HTTP 404 NOT FOUND
-└── OrderCancellationNotAllowedException    → HTTP 422 UNPROCESSABLE ENTITY
+├── OrderCancellationNotAllowedException    → HTTP 422 UNPROCESSABLE ENTITY
+└── AiServiceUnavailableException           → HTTP 503 SERVICE UNAVAILABLE
 ```
 
 Novas exceptions de negócio nos módulos futuros (product, order) seguem o mesmo padrão — estendem `BusinessException` com o status HTTP adequado no construtor.
@@ -492,6 +507,31 @@ Coberturas obrigatórias por controller:
 - Requisição válida retorna status e body esperados
 - Requisição com body inválido retorna 400 (cobre o `@Valid`)
 - Para rotas protegidas: requisição sem token retorna 401 (testado em integração)
+
+### Localização dos testes
+
+```
+src/test/java/br/com/api_core/
+├── support/
+│   └── TestSecurityConfig.java          # Config de segurança permissiva — compartilhada
+└── modules/
+    ├── auth/
+    │   ├── AuthServiceTest.java
+    │   └── AuthControllerTest.java
+    ├── product/
+    │   ├── ProductServiceTest.java
+    │   └── ProductControllerTest.java
+    ├── order/
+    │   ├── OrderServiceTest.java
+    │   └── OrderControllerTest.java
+    ├── audit/
+    │   ├── AuditServiceTest.java
+    │   └── AuditControllerTest.java
+    └── chat/
+        ├── ChatServiceTest.java
+        └── ChatControllerTest.java
+```
+
 ---
 
 ## Decisões de infraestrutura
