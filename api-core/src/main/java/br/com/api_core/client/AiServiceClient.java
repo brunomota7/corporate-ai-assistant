@@ -33,7 +33,7 @@ public class AiServiceClient {
 
             return response != null ? response.chunks() : List.of();
          } catch (WebClientException e) {
-            throw new AiServiceUnavailableException("ai-service unavailable during search" + e);
+            throw new AiServiceUnavailableException("ai-service unavailable during search", e);
         }
     }
 
@@ -50,7 +50,7 @@ public class AiServiceClient {
                     .bodyToMono(ChatCompletion.class)
                     .block();
         } catch (WebClientException e) {
-            throw new AiServiceUnavailableException("ai-service unavailable during chat" + e);
+            throw new AiServiceUnavailableException("ai-service unavailable during chat", e);
         }
     }
 
