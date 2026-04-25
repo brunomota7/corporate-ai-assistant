@@ -54,10 +54,41 @@ public class AiServiceClient {
         }
     }
 
+    /**
+     * Gera embedding de um texto via ai-service.
+     * Usado pelo ingest para indexar documentos no pgvector.
+     */
+    public float[] embed(String text) {
+        try {
+            EmbedResponse response = aiServiceWebClient.post()
+                    .uri("/embed")
+                    .bodyValue(new EmbedRequest(text))
+                    .retrieve()
+                    .bodyToMono(EmbedResponse.class)
+                    .block();
+
+            if (response == null || response.embedding() == null) {
+                throw new AiServiceUnavailableException("Empty embedding response", new RuntimeException());
+            }
+
+            List<Float> embedding = response.embedding();
+            float[] result = new float[embedding.size()];
+            for (int i = 0; i < embedding.size(); i++) {
+                result[i] = embedding.get(i);
+            }
+            return result;
+
+        } catch (WebClientException e) {
+            throw new AiServiceUnavailableException("ai-service during embed", e);
+        }
+    }
+
     // Records internos — apenas para comunicação com o ai-service
     // Não são expostos fora dessa classe
     record SearchRequest(String query) {}
     record SearchResponse(List<String> chunks) {}
+    record EmbedRequest(String text) {}
+    record EmbedResponse(List<Float> embedding) {}
     record ChatRequest(List<MessageDTO> messages, List<String> context) {}
     public record ChatCompletion(String answer, Integer tokensUsed) {}
 }
