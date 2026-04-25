@@ -81,12 +81,18 @@ br.com.api_core/
 │   │       ├── OrderResponseDTO.java
 │   │       └── OrderItemResponseDTO.java
 │   │
-│   └── audit/
-│       ├── AuditController.java     # GET /api/audit — consultas de auditoria
-│       ├── AdminAuditController.java # GET /api/admin/audit — exclusivo ADMIN
-│       ├── AuditService.java        # Persiste log após cada interação do chat
+│   ├── audit/
+│   │   ├── AuditController.java      # GET /api/audit — consultas de auditoria
+│   │   ├── AdminAuditController.java  # GET /api/admin/audit — exclusivo ADMIN
+│   │   ├── AuditService.java         # Persiste log após cada interação do chat
+│   │   └── dto/
+│   │       └── AuditLogResponseDTO.java
+│   │
+│   └── admin/
+│       ├── AdminController.java      # POST /api/admin/ingest
+│       ├── AdminService.java         # Gera embedding via AiServiceClient e persiste em tb_documents
 │       └── dto/
-│           └── AuditLogResponseDTO.java
+│           └── IngestRequestDTO.java
 │
 ├── domain/
 │   ├── User.java                 # Entidade mapeada para tb_users
@@ -129,7 +135,7 @@ br.com.api_core/
 │       └── AiServiceUnavailableException.java       # HTTP 503
 │
 └── client/
-    └── AiServiceClient.java      # WebClient — chama /chat, /embed, /search no ai-service
+    └── AiServiceClient.java      # WebClient — métodos: search(), chat(), embed()
 ```
 
 ### Fluxo de uma requisição de chat
@@ -527,9 +533,12 @@ src/test/java/br/com/api_core/
     ├── audit/
     │   ├── AuditServiceTest.java
     │   └── AuditControllerTest.java
-    └── chat/
-        ├── ChatServiceTest.java
-        └── ChatControllerTest.java
+    ├── chat/
+    │   ├── ChatServiceTest.java         # 7 testes — sessionId, histórico, auditoria, falhas
+    │   ├── ChatControllerTest.java
+    │   └── ChatHistoryServiceTest.java  # 3 testes — chave inexistente, retorno com dados, TTL
+    └── admin/
+        └── AdminControllerTest.java
 ```
 
 ---
