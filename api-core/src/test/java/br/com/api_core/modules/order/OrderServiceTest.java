@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static br.com.api_core.support.TestUtils.setField;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -196,15 +197,5 @@ class OrderServiceTest {
         order.setTotalAmount(BigDecimal.TEN);
         order.setItems(new ArrayList<>());
         return order;
-    }
-
-    private void setField(Object target, String fieldName, Object value) {
-        try {
-            var field = target.getClass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(target, value);
-        } catch (Exception e) {
-            throw new RuntimeException("setField falhou: " + fieldName, e);
-        }
     }
 }
