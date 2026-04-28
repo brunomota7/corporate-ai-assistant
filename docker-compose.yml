@@ -4,19 +4,19 @@ services:
     image: pgvector/pgvector:pg16
     container_name: corporate-ai-postgres
     environment:
-      POSTGRES_DB: corporate_ai
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d corporate_ai"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
-  
+
   redis:
     image: redis:7.2-alpine
     container_name: corporate-ai-redis
@@ -37,9 +37,9 @@ services:
     container_name: corporate-ai-python
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      DATABASE_URL: postgres://postgres:postgres@postgres:5433/corporate_ai
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     ports:
-      - "8081:8081"
+      - "8001:8001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,12 +55,12 @@ services:
       dockerfile: Dockerfile
     container_name: corporate-ai-api-core
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5433/corporate_ai
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      AI_SERVICE_URL: http://ai-service:8081
+      AI_SERVICE_URL: http://ai-service:8001
       JWT_SECRET: ${JWT_SECRET}
     ports:
       - "8080:8080"
