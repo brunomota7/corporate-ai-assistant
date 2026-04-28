@@ -195,24 +195,34 @@ Microsserviço de inteligência. Encapsula toda a comunicação com a OpenAI e a
 ### Estrutura de pacotes
 
 ```
-app/
-├── main.py                    # Entrypoint FastAPI, registro de routers
-├── config.py                  # Leitura de variáveis de ambiente (pydantic-settings)
-├── database.py                # Engine SQLAlchemy + SessionLocal + get_db()
+ai-service/
+├── app/
+│   ├── main.py                    # Entrypoint FastAPI, registro de routers
+│   ├── config.py                  # Leitura de variáveis de ambiente (pydantic-settings)
+│   ├── database.py                # Engine SQLAlchemy + SessionLocal + get_db()
+│   │
+│   ├── routers/
+│   │   ├── chat.py                # POST /chat
+│   │   ├── embed.py               # POST /embed
+│   │   ├── search.py              # POST /search
+│   │   └── health.py              # GET /health
+│   │
+│   ├── services/
+│   │   ├── llm_service.py         # Integração com OpenAI (chat completions)
+│   │   └── vector_service.py      # Embeddings (text-embedding-3-small) + busca pgvector
+│   │
+│   └── schemas/
+│       ├── chat_schema.py         # ChatRequest, ChatResponse, MessageSchema
+│       └── embed_schema.py        # EmbedRequest, EmbedResponse, SearchRequest, SearchResponse
 │
-├── routers/
-│   ├── chat.py                # POST /chat
-│   ├── embed.py               # POST /embed
-│   ├── search.py              # POST /search
-│   └── health.py              # GET /health
+├── tests/
+│   ├── __init__.py
+│   ├── test_llm_service.py        # Testes unitários do LlmService (mock OpenAI)
+│   └── test_vector_service.py     # Testes unitários do VectorService (mock OpenAI + DB)
 │
-├── services/
-│   ├── llm_service.py         # Integração com OpenAI (chat completions)
-│   └── vector_service.py      # Geração de embeddings e busca no pgvector
-│
-└── schemas/
-    ├── chat_schema.py          # ChatRequest, ChatResponse, MessageSchema
-    └── embed_schema.py         # EmbedRequest, EmbedResponse, SearchRequest
+├── requirements.txt               # Dependências de produção
+├── requirements-dev.txt           # pytest, pytest-mock, httpx (dependências de teste)
+└── .env                           # Variáveis de ambiente locais (não versionado)
 ```
 
 ### Endpoints
@@ -478,6 +488,37 @@ Toda resposta de erro retorna o record `ErrorResponse` com o seguinte formato:
 | `handleGenericException` | `Exception` (fallback geral) | 500 INTERNAL SERVER ERROR |
 
 O fallback genérico retorna sempre `"An unexpected error occurred"` — nunca expõe `ex.getMessage()` para não vazar detalhes de infraestrutura.
+
+---
+
+## Estratégia de testes — ai-service (Python)
+
+### Ferramentas
+
+- **pytest** — framework de testes
+- **pytest-mock** — `mocker` fixture para substituir dependências (equivalente ao Mockito)
+- **unittest.mock** — `MagicMock` e `patch` da biblioteca padrão do Python
+
+### Padrão de teste unitário
+
+Cada service tem sua classe de teste em `tests/`. As dependências externas (cliente OpenAI e banco de dados) são mockadas — nenhum teste unitário faz chamadas reais à API ou ao banco.
+
+### Localização dos testes
+
+```
+tests/
+├── __init__.py
+├── test_llm_service.py        # 3 testes — resposta normal, contagem de tokens, falha da API
+└── test_vector_service.py     # 4 testes — embed, search com resultados, search vazio, store
+```
+
+### Como executar
+
+```bash
+# Na raiz do ai-service
+pip install -r requirements-dev.txt
+pytest tests/ -v
+```
 
 ---
 
