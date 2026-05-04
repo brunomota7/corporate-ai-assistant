@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 40px auto; background: #fff; border-radius: 8px; padding: 40px; }
+        .header { background: #1E3A5F; color: #fff; padding: 24px; border-radius: 8px 8px 0 0; text-align: center; }
+        .body { padding: 24px 0; color: #333; line-height: 1.6; }
+        .footer { text-align: center; color: #999; font-size: 12px; margin-top: 32px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h2>Corporate AI Assistant</h2>
+    </div>
+    <div class="body">
+        <p>Olá, <strong th:text="${name}">Usuário</strong>!</p>
+        <p>Seja bem-vindo ao <strong>Corporate AI Assistant</strong>. Sua conta foi criada com sucesso.</p>
+        <p>Você já pode fazer login com o e-mail <strong th:text="${email}">email</strong> e começar a usar o assistente.</p>
+        <p>Qualquer dúvida, estamos à disposição.</p>
+    </div>
+    <div class="footer">
+        <p>© 2026 Corporate AI Assistant. Todos os direitos reservados.</p>
+    </div>
+</div>
+</body>
+</html>
