@@ -13,6 +13,10 @@ import br.com.api_core.infra.exception.OrderCancellationNotAllowedException;
 import br.com.api_core.infra.exception.OrderNotFoundException;
 import br.com.api_core.infra.exception.ProductNotFoundException;
 import br.com.api_core.infra.exception.ResourceNotFoundException;
+import br.com.api_core.infra.messaging.EventPublisher;
+import br.com.api_core.infra.messaging.dto.OrderCancelledEventDTO;
+import br.com.api_core.infra.messaging.dto.OrderConfirmedEventDTO;
+import br.com.api_core.infra.messaging.dto.OrderStatusChangedEventDTO;
 import br.com.api_core.modules.order.dto.*;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
@@ -27,13 +31,16 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final EventPublisher eventPublisher;
 
     public OrderService(OrderRepository orderRepository,
                         ProductRepository productRepository,
-                        UserRepository userRepository) {
+                        UserRepository userRepository,
+                        EventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     private OrderResponseDTO toResponseDTO(Order order) {
@@ -99,6 +106,24 @@ public class OrderService {
 
         orderRepository.save(order);
 
+        List<OrderConfirmedEventDTO.OrderItemDTO> itemDTOs = order.getItems().stream()
+                .map(item -> new OrderConfirmedEventDTO.OrderItemDTO(
+                        item.getProduct().getName(),
+                        item.getQuantity(),
+                        item.getUnitPrice()
+                ))
+                .toList();
+
+        eventPublisher.publishOrderConfirmed(new OrderConfirmedEventDTO(
+                order.getId().toString(),
+                user.getId().toString(),
+                user.getName(),
+                user.getEmail(),
+                order.getTotalAmount(),
+                order.getNotes(),
+                itemDTOs
+        ));
+
         return toResponseDTO(order);
     }
 
@@ -132,8 +157,18 @@ public class OrderService {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new OrderNotFoundException(id.toString()));
 
+        String oldStatus = order.getStatus().name();
         order.setStatus(dto.status());
         orderRepository.save(order);
+
+        eventPublisher.publishOrderStatusChanged(new OrderStatusChangedEventDTO(
+                order.getId().toString(),
+                order.getUser().getId().toString(),
+                order.getUser().getName(),
+                order.getUser().getEmail(),
+                oldStatus,
+                dto.status().name()
+        ));
 
         return toResponseDTO(order);
     }
@@ -150,5 +185,13 @@ public class OrderService {
 
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
+
+        eventPublisher.publishOrderCancelled(new OrderCancelledEventDTO(
+                order.getId().toString(),
+                order.getUser().getId().toString(),
+                order.getUser().getName(),
+                order.getUser().getEmail(),
+                order.getTotalAmount()
+        ));
     }
 }

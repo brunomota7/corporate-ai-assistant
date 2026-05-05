@@ -4,6 +4,8 @@ import br.com.api_core.domain.User;
 import br.com.api_core.domain.enums.Role;
 import br.com.api_core.domain.repository.UserRepository;
 import br.com.api_core.infra.exception.UserAlreadyExistsException;
+import br.com.api_core.infra.messaging.EventPublisher;
+import br.com.api_core.infra.messaging.dto.UserRegisteredEventDTO;
 import br.com.api_core.infra.security.JwtService;
 import br.com.api_core.modules.auth.dto.AuthLoginDTO;
 import br.com.api_core.modules.auth.dto.AuthRegisterDTO;
@@ -20,13 +22,16 @@ public class AuthService {
     private final UserRepository userRepository;
     private final JwtService jwtService;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final EventPublisher eventPublisher;
 
     public AuthService(UserRepository userRepository,
                        JwtService jwtService,
-                       BCryptPasswordEncoder passwordEncoder) {
+                       BCryptPasswordEncoder passwordEncoder,
+                       EventPublisher eventPublisher) {
         this.userRepository = userRepository;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -44,6 +49,12 @@ public class AuthService {
         user.setActive(true);
 
         userRepository.save(user);
+
+        eventPublisher.publishUserRegistered(new UserRegisteredEventDTO(
+                user.getId().toString(),
+                user.getName(),
+                user.getEmail()
+        ));
     }
 
     public AuthResponseDTO login(AuthLoginDTO dto) {
