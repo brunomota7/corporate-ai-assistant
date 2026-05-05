@@ -12,6 +12,7 @@ import br.com.api_core.domain.repository.UserRepository;
 import br.com.api_core.infra.exception.OrderCancellationNotAllowedException;
 import br.com.api_core.infra.exception.OrderNotFoundException;
 import br.com.api_core.infra.exception.ProductNotFoundException;
+import br.com.api_core.infra.messaging.EventPublisher;
 import br.com.api_core.modules.order.dto.OrderCreateDTO;
 import br.com.api_core.modules.order.dto.OrderItemCreateDTO;
 import br.com.api_core.modules.order.dto.OrderResponseDTO;
@@ -45,6 +46,9 @@ class OrderServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private EventPublisher eventPublisher;
 
     @InjectMocks
     private OrderService orderService;
@@ -88,6 +92,8 @@ class OrderServiceTest {
         assertEquals(new BigDecimal("100.00"), response.totalAmount());
         assertEquals(OrderStatus.PENDING, response.status());
         assertEquals("Entrega rápida", response.notes());
+
+        verify(eventPublisher).publishOrderConfirmed(any());
     }
 
     @Test
@@ -156,6 +162,8 @@ class OrderServiceTest {
 
         assertEquals(OrderStatus.CANCELLED, order.getStatus());
         verify(orderRepository).save(order);
+
+        verify(eventPublisher).publishOrderCancelled(any());
     }
 
     @Test
@@ -184,6 +192,8 @@ class OrderServiceTest {
         OrderResponseDTO response = orderService.updateStatus(order.getId(), dto);
 
         assertEquals(OrderStatus.PROCESSING, response.status());
+
+        verify(eventPublisher).publishOrderStatusChanged(any());
     }
 
     private Order buildOrder(UUID ownerId) {

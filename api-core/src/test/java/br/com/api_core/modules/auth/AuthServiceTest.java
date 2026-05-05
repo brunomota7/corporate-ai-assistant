@@ -4,6 +4,7 @@ import br.com.api_core.domain.User;
 import br.com.api_core.domain.enums.Role;
 import br.com.api_core.domain.repository.UserRepository;
 import br.com.api_core.infra.exception.UserAlreadyExistsException;
+import br.com.api_core.infra.messaging.EventPublisher;
 import br.com.api_core.infra.security.JwtService;
 import br.com.api_core.modules.auth.dto.AuthLoginDTO;
 import br.com.api_core.modules.auth.dto.AuthRegisterDTO;
@@ -36,6 +37,9 @@ class AuthServiceTest {
     @Mock
     private BCryptPasswordEncoder passwordEncoder;
 
+    @Mock
+    private EventPublisher eventPublisher;
+
     @InjectMocks
     private AuthService authService;
 
@@ -51,6 +55,11 @@ class AuthServiceTest {
         verify(userRepository).save(argThat(user ->
                 user.getEmail().equals(dto.email()) &&
                         user.getPassword().equals("encoded")
+        ));
+
+        verify(eventPublisher).publishUserRegistered(argThat(event ->
+                event.email().equals(dto.email()) &&
+                event.name().equals(dto.name())
         ));
     }
 
